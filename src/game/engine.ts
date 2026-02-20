@@ -3,7 +3,8 @@ import {
   GRAVITY, PLAYER_SPEED, JUMP_FORCE, JETPACK_FORCE,
   FUEL_DRAIN, FUEL_REGEN, BULLET_SPEED, SHOOT_COOLDOWN,
   ENEMY_SPEED, ENEMY_SHOOT_COOLDOWN, WORLD_WIDTH, WORLD_HEIGHT,
-  CANVAS_WIDTH, CANVAS_HEIGHT
+  CANVAS_WIDTH, CANVAS_HEIGHT, DASH_SPEED, DASH_DURATION, DASH_COOLDOWN,
+  WALL_SLIDE_SPEED, WALL_JUMP_FORCE_X, WALL_JUMP_FORCE_Y
 } from './constants';
 
 function createPlatforms(): Platform[] {
@@ -86,6 +87,14 @@ export function createInitialState(): GameState {
       shootCooldown: 0,
       score: 0,
       aimAngle: 0,
+      jumpsLeft: 2,
+      maxJumps: 2,
+      wallSliding: false,
+      wallDir: 0,
+      dashCooldown: 0,
+      dashTimer: 0,
+      dashDir: { x: 0, y: 0 },
+      canDash: true,
     },
     enemies,
     bullets: [],
@@ -101,6 +110,7 @@ export function createInitialState(): GameState {
     enemiesKilled: 0,
     paused: false,
     started: false,
+    _jumpHeld: false,
   };
 }
 
@@ -114,15 +124,22 @@ function rectCollision(
 function applyPhysics(
   entity: { pos: { x: number; y: number }; vel: { x: number; y: number }; width: number; height: number },
   platforms: Platform[]
-): boolean {
+): { grounded: boolean; wallDir: 1 | -1 | 0 } {
   entity.vel.y += GRAVITY;
   if (entity.vel.y > 15) entity.vel.y = 15;
+
+  let wallDir: 1 | -1 | 0 = 0;
 
   entity.pos.x += entity.vel.x;
   for (const p of platforms) {
     if (rectCollision(entity.pos.x, entity.pos.y, entity.width, entity.height, p.x, p.y, p.width, p.height)) {
-      if (entity.vel.x > 0) entity.pos.x = p.x - entity.width;
-      else entity.pos.x = p.x + p.width;
+      if (entity.vel.x > 0) {
+        entity.pos.x = p.x - entity.width;
+        wallDir = 1;
+      } else {
+        entity.pos.x = p.x + p.width;
+        wallDir = -1;
+      }
       entity.vel.x = 0;
     }
   }
@@ -140,7 +157,7 @@ function applyPhysics(
       entity.vel.y = 0;
     }
   }
-  return grounded;
+  return { grounded, wallDir };
 }
 
 function addParticles(state: GameState, x: number, y: number, color: string, count: number) {
@@ -161,22 +178,61 @@ export function updateGame(state: GameState): void {
 
   const { player, keys } = state;
 
-  // Player movement
-  player.vel.x = 0;
-  if (keys.has('a') || keys.has('arrowleft')) {
-    player.vel.x = -PLAYER_SPEED;
-    player.facing = -1;
-  }
-  if (keys.has('d') || keys.has('arrowright')) {
-    player.vel.x = PLAYER_SPEED;
-    player.facing = 1;
-  }
-  if ((keys.has('w') || keys.has('arrowup') || keys.has(' ')) && player.grounded) {
-    player.vel.y = JUMP_FORCE;
+  // Dash
+  if (player.dashCooldown > 0) player.dashCooldown--;
+  if (player.dashTimer > 0) {
+    player.dashTimer--;
+    player.vel.x = player.dashDir.x * DASH_SPEED;
+    player.vel.y = player.dashDir.y * DASH_SPEED * 0.3;
+    addParticles(state, player.pos.x + player.width / 2, player.pos.y + player.height / 2, '#ffffff', 1);
+  } else {
+    // Normal movement
+    player.vel.x = 0;
+    if (keys.has('a') || keys.has('arrowleft')) {
+      player.vel.x = -PLAYER_SPEED;
+    }
+    if (keys.has('d') || keys.has('arrowright')) {
+      player.vel.x = PLAYER_SPEED;
+    }
   }
 
-  // Jetpack
-  if ((keys.has('w') || keys.has('arrowup') || keys.has(' ')) && !player.grounded && player.fuel > 0) {
+  // Trigger dash with Shift
+  if (keys.has('shift') && player.canDash && player.dashCooldown <= 0 && player.dashTimer <= 0) {
+    let dx = 0, dy = 0;
+    if (keys.has('a') || keys.has('arrowleft')) dx = -1;
+    if (keys.has('d') || keys.has('arrowright')) dx = 1;
+    if (keys.has('w') || keys.has('arrowup')) dy = -1;
+    if (keys.has('s') || keys.has('arrowdown')) dy = 1;
+    if (dx === 0 && dy === 0) dx = player.facing;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    player.dashDir = { x: dx / len, y: dy / len };
+    player.dashTimer = DASH_DURATION;
+    player.dashCooldown = DASH_COOLDOWN;
+    player.canDash = false;
+    addParticles(state, player.pos.x + player.width / 2, player.pos.y + player.height / 2, '#88ccff', 8);
+  }
+
+  // Jump / double jump / wall jump
+  const jumpPressed = keys.has('w') || keys.has('arrowup') || keys.has(' ');
+  if (jumpPressed && !state._jumpHeld) {
+    if (player.wallSliding && player.wallDir !== 0) {
+      // Wall jump
+      player.vel.y = WALL_JUMP_FORCE_Y;
+      player.vel.x = -player.wallDir * WALL_JUMP_FORCE_X;
+      player.jumpsLeft = Math.max(player.jumpsLeft - 1, 0);
+      addParticles(state, player.pos.x + (player.wallDir > 0 ? player.width : 0), player.pos.y + player.height / 2, '#aaffaa', 6);
+    } else if (player.jumpsLeft > 0) {
+      player.vel.y = JUMP_FORCE * (player.grounded ? 1 : 0.85);
+      player.jumpsLeft--;
+      if (!player.grounded) {
+        addParticles(state, player.pos.x + player.width / 2, player.pos.y + player.height, '#aaaaff', 5);
+      }
+    }
+  }
+  state._jumpHeld = jumpPressed;
+
+  // Jetpack (only when no jumps left)
+  if (jumpPressed && !player.grounded && player.jumpsLeft <= 0 && player.fuel > 0 && player.dashTimer <= 0) {
     player.vel.y += JETPACK_FORCE;
     player.fuel -= FUEL_DRAIN;
     if (player.fuel < 0) player.fuel = 0;
@@ -188,7 +244,31 @@ export function updateGame(state: GameState): void {
     player.fuel += FUEL_REGEN;
   }
 
-  player.grounded = applyPhysics(player, state.platforms);
+  const physResult = applyPhysics(player, state.platforms);
+  player.grounded = physResult.grounded;
+
+  // Wall sliding
+  player.wallSliding = false;
+  if (!player.grounded && physResult.wallDir !== 0 && player.vel.y > 0) {
+    const movingIntoWall = (physResult.wallDir === 1 && (keys.has('d') || keys.has('arrowright'))) ||
+                           (physResult.wallDir === -1 && (keys.has('a') || keys.has('arrowleft')));
+    if (movingIntoWall) {
+      player.wallSliding = true;
+      player.wallDir = physResult.wallDir;
+      player.vel.y = Math.min(player.vel.y, WALL_SLIDE_SPEED);
+      player.jumpsLeft = 1; // Allow wall jump
+      addParticles(state, player.pos.x + (physResult.wallDir > 0 ? player.width : 0), player.pos.y + player.height * 0.7, '#666', 1);
+    }
+  }
+  if (player.grounded) {
+    player.wallDir = 0;
+  }
+
+  // Reset jumps & dash on ground
+  if (player.grounded) {
+    player.jumpsLeft = player.maxJumps;
+    player.canDash = true;
+  }
 
   // Aim angle toward mouse (world coords)
   const worldMouseX = state.mousePos.x + state.camera.x;
@@ -299,7 +379,7 @@ export function updateGame(state: GameState): void {
     }
     if (e.shootCooldown > 0) e.shootCooldown--;
 
-    applyPhysics(e, state.platforms);
+    applyPhysics(e, state.platforms); // enemies don't need wall info
 
     // Keep in bounds
     if (e.pos.x < 30) { e.pos.x = 30; e.patrolDir = 1; }

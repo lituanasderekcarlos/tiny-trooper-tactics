@@ -12,7 +12,7 @@ const GameCanvas = () => {
 
   const handleKey = useCallback((e: KeyboardEvent, down: boolean) => {
     const key = e.key.toLowerCase();
-    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
+    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(key)) {
       e.preventDefault();
       if (down) stateRef.current.keys.add(key);
       else stateRef.current.keys.delete(key);

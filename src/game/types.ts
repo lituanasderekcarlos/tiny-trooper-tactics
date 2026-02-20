@@ -20,6 +20,17 @@ export interface Player {
   shootCooldown: number;
   score: number;
   aimAngle: number;
+  // Double jump
+  jumpsLeft: number;
+  maxJumps: number;
+  // Wall slide
+  wallSliding: boolean;
+  wallDir: 1 | -1 | 0;
+  // Dash
+  dashCooldown: number;
+  dashTimer: number;
+  dashDir: Vector2;
+  canDash: boolean;
 }
 
 export interface Bullet {
@@ -80,4 +91,5 @@ export interface GameState {
   enemiesKilled: number;
   paused: boolean;
   started: boolean;
+  _jumpHeld: boolean;
 }

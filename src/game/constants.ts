@@ -12,6 +12,12 @@ export const ENEMY_SPEED = 1.5;
 export const ENEMY_SHOOT_COOLDOWN = 60;
 export const WORLD_WIDTH = 2400;
 export const WORLD_HEIGHT = 1200;
+export const DASH_SPEED = 14;
+export const DASH_DURATION = 6;
+export const DASH_COOLDOWN = 40;
+export const WALL_SLIDE_SPEED = 1.5;
+export const WALL_JUMP_FORCE_X = 8;
+export const WALL_JUMP_FORCE_Y = -9;
 
 export const COLORS = {
   sky: '#1a2a1a',
