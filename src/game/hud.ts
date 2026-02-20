@@ -1,5 +1,5 @@
 import { GameState } from './types';
-import { CANVAS_WIDTH, COLORS } from './constants';
+import { CANVAS_WIDTH, COLORS, DASH_COOLDOWN } from './constants';
 
 export function renderHUD(ctx: CanvasRenderingContext2D, state: GameState) {
   const { player } = state;
@@ -30,11 +30,28 @@ export function renderHUD(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.fillStyle = '#fff';
   ctx.fillText(`FUEL ${Math.ceil(player.fuel)}`, pad + 4, pad + barH + 15);
 
-  // Ammo
+  // Ammo & movement info
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 14px Rajdhani, sans-serif';
   ctx.textAlign = 'left';
   ctx.fillText(`🔫 ${player.ammo}/${player.maxAmmo}`, pad, pad + barH * 2 + 22);
+
+  // Dash indicator
+  const dashReady = player.dashCooldown <= 0;
+  ctx.fillStyle = dashReady ? '#88ccff' : '#444';
+  ctx.font = 'bold 11px Rajdhani, sans-serif';
+  const dashText = dashReady ? 'DASH ✓' : `DASH ${Math.ceil(player.dashCooldown / 60 * 100)}%`;
+  ctx.fillText(dashText, pad, pad + barH * 2 + 38);
+
+  // Double jump indicator
+  ctx.fillStyle = player.jumpsLeft > 0 ? '#aaaaff' : '#444';
+  ctx.fillText(`JUMPS: ${'●'.repeat(player.jumpsLeft)}${'○'.repeat(player.maxJumps - player.jumpsLeft)}`, pad + 70, pad + barH * 2 + 38);
+
+  // Wall slide indicator
+  if (player.wallSliding) {
+    ctx.fillStyle = '#aaffaa';
+    ctx.fillText('WALL SLIDE', pad + 150, pad + barH * 2 + 38);
+  }
 
   // Score & Wave
   ctx.textAlign = 'right';
@@ -95,12 +112,15 @@ export function renderOverlay(ctx: CanvasRenderingContext2D, state: GameState) {
 
     ctx.fillStyle = '#ccc';
     ctx.font = '14px Rajdhani, sans-serif';
-    ctx.fillText('WASD / Arrows — Move & Jump', CANVAS_WIDTH / 2, 270);
-    ctx.fillText('Hold Jump in air — Jetpack', CANVAS_WIDTH / 2, 295);
-    ctx.fillText('Mouse — Aim & Shoot', CANVAS_WIDTH / 2, 320);
+    ctx.fillText('WASD / Arrows — Move & Jump', CANVAS_WIDTH / 2, 260);
+    ctx.fillText('Double tap Jump — Double Jump', CANVAS_WIDTH / 2, 280);
+    ctx.fillText('Hold into wall + Jump — Wall Jump', CANVAS_WIDTH / 2, 300);
+    ctx.fillText('Shift + Direction — Dash', CANVAS_WIDTH / 2, 320);
+    ctx.fillText('Hold Jump (no jumps left) — Jetpack', CANVAS_WIDTH / 2, 340);
+    ctx.fillText('Mouse — Aim & Shoot', CANVAS_WIDTH / 2, 360);
 
     ctx.fillStyle = '#e8d44d';
     ctx.font = '12px "Press Start 2P", monospace';
-    ctx.fillText('CLICK TO START', CANVAS_WIDTH / 2, 380);
+    ctx.fillText('CLICK TO START', CANVAS_WIDTH / 2, 410);
   }
 }
